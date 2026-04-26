@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Free AI Image Generator</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f172a;
+      --card: #1e293b;
+      --accent: #38bdf8;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --danger: #f87171;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(circle at top, #1e293b, #0f172a 50%);
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .app {
+      width: min(900px, 100%);
+      background: color-mix(in oklab, var(--card) 90%, black);
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 1.7rem;
+    }
+
+    .sub {
+      color: var(--muted);
+      margin-top: -8px;
+      margin-bottom: 20px;
+    }
+
+    .row {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr auto;
+    }
+
+    input, select, button {
+      font: inherit;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      padding: 12px;
+      background: #0b1220;
+      color: var(--text);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      color: #082f49;
+      font-weight: 700;
+      border: none;
+      transition: transform 120ms ease, filter 120ms ease;
+    }
+
+    button:hover { filter: brightness(1.1); }
+    button:active { transform: translateY(1px); }
+    button[disabled] { opacity: 0.55; cursor: not-allowed; }
+
+    .status {
+      min-height: 1.25rem;
+      margin-top: 10px;
+      color: var(--muted);
+    }
+
+    .status.error { color: var(--danger); }
+
+    .output {
+      margin-top: 18px;
+      border: 1px dashed #475569;
+      border-radius: 12px;
+      min-height: 360px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background: rgba(15, 23, 42, 0.6);
+    }
+
+    .output img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .hint {
+      color: var(--muted);
+      text-align: center;
+      padding: 20px;
+      max-width: 70ch;
+    }
+
+    @media (max-width: 700px) {
+      .controls { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🎨 Free AI Image Generator</h1>
+    <p class="sub">No signup. Enter a prompt and generate an image using a free public model endpoint.</p>
+
+    <label for="prompt">Prompt</label>
+    <input id="prompt" type="text" placeholder="e.g. A cyberpunk city at sunrise, ultra detailed" />
+
+    <div class="controls">
+      <select id="width" aria-label="Image width">
+        <option value="512">512 px</option>
+        <option value="768" selected>768 px</option>
+        <option value="1024">1024 px</option>
+      </select>
+      <select id="height" aria-label="Image height">
+        <option value="512">512 px</option>
+        <option value="768" selected>768 px</option>
+        <option value="1024">1024 px</option>
+      </select>
+      <button id="generate">Generate</button>
+      <button id="download" disabled>Download</button>
+    </div>
+
+    <p id="status" class="status"></p>
+
+    <section class="output" id="output">
+      <p class="hint">Your generated image will appear here.</p>
+    </section>
+  </main>
+
+  <script>
+    const promptEl = document.getElementById('prompt');
+    const widthEl = document.getElementById('width');
+    const heightEl = document.getElementById('height');
+    const generateBtn = document.getElementById('generate');
+    const downloadBtn = document.getElementById('download');
+    const statusEl = document.getElementById('status');
+    const outputEl = document.getElementById('output');
+
+    let latestImageUrl = '';
+
+    function setStatus(text, isError = false) {
+      statusEl.textContent = text;
+      statusEl.classList.toggle('error', isError);
+    }
+
+    function buildImageUrl(prompt, width, height) {
+      const encoded = encodeURIComponent(prompt.trim());
+      const seed = crypto.getRandomValues(new Uint32Array(1))[0];
+      return `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
+    }
+
+    async function loadImage(url) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.alt = 'Generated AI artwork';
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Image generation failed at the provider.'));
+        img.src = url;
+      });
+    }
+
+    generateBtn.addEventListener('click', async () => {
+      const prompt = promptEl.value;
+      if (!prompt.trim()) {
+        setStatus('Please add a prompt first.', true);
+        return;
+      }
+
+      const width = widthEl.value;
+      const height = heightEl.value;
+      const url = buildImageUrl(prompt, width, height);
+
+      generateBtn.disabled = true;
+      downloadBtn.disabled = true;
+      setStatus('Generating image... this can take a few seconds.');
+
+      try {
+        const img = await loadImage(url);
+        latestImageUrl = img.src;
+        outputEl.innerHTML = '';
+        outputEl.appendChild(img);
+        setStatus('Image ready! You can generate again or download it.');
+        downloadBtn.disabled = false;
+      } catch (error) {
+        setStatus(error.message || 'Failed to generate image.', true);
+      } finally {
+        generateBtn.disabled = false;
+      }
+    });
+
+    downloadBtn.addEventListener('click', async () => {
+      if (!latestImageUrl) return;
+
+      try {
+        const response = await fetch(latestImageUrl);
+        const blob = await response.blob();
+        const link = document.createElement('a');
+        const objectUrl = URL.createObjectURL(blob);
+        link.href = objectUrl;
+        link.download = `ai-image-${Date.now()}.png`;
+        link.click();
+        URL.revokeObjectURL(objectUrl);
+      } catch {
+        setStatus('Unable to download from provider URL. Right-click the image to save.', true);
+      }
+    });
+  </script>
+</body>
+</html>
